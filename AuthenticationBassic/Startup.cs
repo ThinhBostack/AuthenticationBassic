@@ -11,6 +11,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using AuthenticationBassic.AuthorizationRequirement;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc.Authorization;
+using AuthenticationBassic.Controllers;
+using Microsoft.AspNetCore.Authentication;
+using AuthenticationBassic.Transformer;
+using AuthenticationBassic.CustomPolicyProvider;
 
 namespace AuthenticationBassic
 {
@@ -24,17 +29,15 @@ namespace AuthenticationBassic
 
         public void ConfigureServices(IServiceCollection services)
         {
-            #region Db available
-            //Make it available for methods to be injected everywhere within the application             
+            #region Db available                      
             services.AddDbContext<AppDbContext>(config =>
             {
                 config.UseInMemoryDatabase("Memory"); //Memory is name of Db
             });
-            #endregion                      
+            #endregion
 
-            //Register identity
-            //Add identity registers the services(infrastructure alllow to communicate with Db)
-            services.AddIdentity<IdentityUser, IdentityRole>(config =>
+            #region Config Password
+            /*services.AddIdentity<IdentityUser, IdentityRole>(config =>
             {
                 #region Password config
                 config.Password.RequiredLength = 3;
@@ -45,27 +48,28 @@ namespace AuthenticationBassic
                 #endregion
             })
                 .AddEntityFrameworkStores<AppDbContext>()
-                .AddDefaultTokenProviders(); //Provide token
+                .AddDefaultTokenProviders(); //Provide token*/
+            #endregion
 
             #region Create cookies to authenticate bonus identity
-            services.ConfigureApplicationCookie(config =>
+            /*services.ConfigureApplicationCookie(config =>
             {
                 config.Cookie.Name = "Identity.Cookie";
                 config.LoginPath = "/Home/Login";
-            });
+            });*/
             #endregion
 
             #region Create cookies to authenticate
-            /*Create cookies to authenticate
+            //Create cookies to authenticate
             services.AddAuthentication("CookieAuth")
                 .AddCookie("CookieAuth", config =>
                 {
                     config.Cookie.Name = "Grandmas.Cookie";
                     config.LoginPath = "/Home/Authenticate";
-               });*/
+               });
             #endregion
 
-            #region Build DefaultPolicy
+            #region Build Default Policy
             /*See if it is suitable to allow user to get in
             services.AddAuthorization(config =>
                 {
@@ -82,7 +86,7 @@ namespace AuthenticationBassic
             #endregion
 
             #region Build Policy with own handler
-            services.AddAuthorization(config =>
+            /*services.AddAuthorization(config =>
                 {
                     config.AddPolicy("Claim.DoB", policyBuilder =>
                     {
@@ -95,23 +99,52 @@ namespace AuthenticationBassic
                         policyBuilder.RequireClaim(ClaimTypes.Role,"Admin"); 
                     });
 
-                });
-            //up to this line: 'app.UseAuthorization();'
-            //=> bring up all the authorization policy that configured above
-            //=> find requirement claim
-            //=> find service to process the requirement
+                });*/
+            #endregion
+
+            #region Dependency Injection
+            services.AddSingleton<IAuthorizationPolicyProvider, CustomAuthorizationPolicyProvider>();
+            services.AddScoped<IAuthorizationHandler, SecurityLevelHandler>();
+            //Override method of IAuthorizationHandler, config requirement
             services.AddScoped<IAuthorizationHandler, CustomRequireClaimHandler>();
+            //Override method of IAuthorizationHandler, config authorization handler
+            services.AddScoped<IAuthorizationHandler, CookieJarAuthorizationHandler>();
+            ////Override method of IClaimsTransformation
+            services.AddScoped<IClaimsTransformation, ClaimTransformation>();
             #endregion
 
             #region MailKit
+            /*
             //'GetSection("Email")': config in appsettings.json
             //'.Get<MailKitOptions>()': get MailKitOptions based on info configured(F12 for more)            
             var mailKitOptions = _config.GetSection("Email").Get<MailKitOptions>(); 
             //Add MailKit into app as an emailSender
-            services.AddMailKit(config => config.UseMailKit(mailKitOptions)); 
+            services.AddMailKit(config => config.UseMailKit(mailKitOptions));*/
             #endregion
 
+            #region Authorization Filter(build policy through filter)
+            /*services.AddControllersWithViews(config =>
+            {
+                var defaultAuthBuilder = new AuthorizationPolicyBuilder();
+                var defaultAuthPolicy = defaultAuthBuilder //Build policy
+                .RequireAuthenticatedUser()                
+                .RequireClaim(ClaimTypes.DateOfBirth)
+                //...Add more requirements here
+                .Build(); //Build
+                
+                config.Filters.Add(new AuthorizeFilter(defaultAuthPolicy));
+            });*/
+
             services.AddControllersWithViews();
+            #endregion
+
+            //Config Razor Page
+            services.AddRazorPages()
+                .AddRazorPagesOptions(config =>
+                {
+                    //Set authorized page
+                    config.Conventions.AuthorizePage("/Razorz/Secured");
+                });
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -126,15 +159,16 @@ namespace AuthenticationBassic
             //Who are you
             app.UseAuthentication();
             //What are you allowed to do 
+            //up to this line: 'app.UseAuthorization();'
+            //=> bring up all the authorization policy that configured above
+            //=> find requirement claim
+            //=> find service to process the requirement
             app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
-            {
-                /*endpoints.MapGet("/", async context =>
-                {
-                    await context.Response.WriteAsync("Hello World!");
-                });*/
+            {                
                 endpoints.MapDefaultControllerRoute();
+                endpoints.MapRazorPages();
             });
         }
     }

@@ -6,25 +6,29 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using NETCore.MailKit.Core;
+using AuthenticationBassic.CustomPolicyProvider;
 
 namespace AuthenticationBassic.Controllers
-{
+{   
     public class HomeController : Controller
     {
-        private readonly UserManager<IdentityUser> userManager;
+        /*private readonly UserManager<IdentityUser> userManager;
         private readonly SignInManager<IdentityUser> signInManager;
-        private readonly IEmailService emailService;
+        private readonly IEmailService emailService;*/
+        private readonly IAuthorizationService authorizationService;
         public HomeController(
-            UserManager<IdentityUser> userManager,
+            /*UserManager<IdentityUser> userManager,
             SignInManager<IdentityUser> signInManager,
-            IEmailService emailService)
+            IEmailService emailService,*/
+            IAuthorizationService authorizationService)
         {
-            this.userManager = userManager;
+            /*this.userManager = userManager;
             this.signInManager = signInManager;
-            this.emailService = emailService;
+            this.emailService = emailService;*/
+            this.authorizationService = authorizationService;
         }
 
-        //Navigate to page Index.cshtml
+        //Navigate to page Index.cshtml     
         public IActionResult Index() => View();
 
         //Navigate to page Secret.cshtml with authorizing
@@ -37,8 +41,15 @@ namespace AuthenticationBassic.Controllers
         [Authorize(Policy = "Admin")]
         public IActionResult SecretRole() => View("Secret");
 
-        #region Create object for authorizing        
-        /*public IActionResult Authenticate()
+        [SecurityLevelAttriute(5)]
+        public IActionResult SecretLevel() => View("Secret");
+
+        [SecurityLevelAttriute(10)]
+        public IActionResult SecretHigherLevel() => View("Secret");
+
+        #region Create object for authorizing   
+        [AllowAnonymous]
+        public IActionResult Authenticate()
         {
             var grandClaims = new List<Claim>()
             { 
@@ -46,6 +57,7 @@ namespace AuthenticationBassic.Controllers
                 new Claim(ClaimTypes.Email, "Bob@gmail.com"),
                 new Claim(ClaimTypes.DateOfBirth, "11/11/2000"),
                 new Claim(ClaimTypes.Role, "Admin"),
+                new Claim(DynamicPolicies.SecurityLevel, "7"),
                 new Claim("Grandma.Says", "Very nice boy"),
             };
 
@@ -61,161 +73,173 @@ namespace AuthenticationBassic.Controllers
 
             var userPricipal = new ClaimsPrincipal(new[] { grandmaIdentity, licenseIndentity });
 
-            //Sign in
-            HttpContext.SignInAsync(userPricipal);
-
-            //Redirect to Index after authorizing
-            return RedirectToAction("Index");22
-        }*/
+            //Check this authorization principle when sign in
+            HttpContext.SignInAsync(userPricipal);            
+            return RedirectToAction("Secret");
+        }
         #endregion
 
-        public IActionResult Login() => View();
-
-        public IActionResult Error() => View();
-
-        [HttpPost]
-        public async Task<IActionResult> Login(string userName, string password)
+        //Extras (IAuthorizationService & much more...)
+        public async Task<IActionResult> DoStuff()
         {
-            //Login func           
-            var user = await this.userManager.FindByNameAsync(userName);
-
-            //If userName is existed
-            if (user != null)
+            //Check if user meet the specific authorization policy
+            //HttpContext.User
+            var authResult = await authorizationService.AuthorizeAsync(User, "Claim.DoB"); 
+            
+            if (authResult.Succeeded)
             {
-                //Sign in
-                var signInResult = await this.signInManager.PasswordSignInAsync(user, password, false, false);
-                /*Cac parameter: 
-                  user, 
-                  password, 
-                  isPersistent(bool): period of time that cookies exist, need to inform user when using
-                  lockoutOnFailure(bool): counter in Db*/
-
-                //If successful signing in
-                if (signInResult.Succeeded)
-                {
-                    return RedirectToAction("Index");
-                }
+                return View("Index");
             }
-            return RedirectToAction("Error");
+            return View("Index");
         }
 
-        public IActionResult Register() => View();
+        //public IActionResult Login() => View();
 
-        [HttpPost]
-        public async Task<IActionResult> Register(string userName, string password, string email)
-        {
-            //Register func
-            //Create an identity user
-            var user = new IdentityUser
-            {
-                UserName = userName,
-                Email = email,
-            };
+        //public IActionResult Error() => View();
 
-            //Create a record in Db
-            var result = await this.userManager.CreateAsync(user, password);
+        //[HttpPost]
+        //public async Task<IActionResult> Login(string userName, string password)
+        //{
+        //    //Login func           
+        //    var user = await this.userManager.FindByNameAsync(userName);
 
-            if (result.Succeeded)
-            {
-                #region Verify Email
-                //Generate email token
-                var code = await this.userManager.GenerateEmailConfirmationTokenAsync(user);
-                var link = Url.Action(nameof(RegisterVerifyEmail), "Home", new { userID = user.Id, code },
-                    Request.Scheme, Request.Host.ToString());
+        //    //If userName is existed
+        //    if (user != null)
+        //    {
+        //        //Sign in
+        //        var signInResult = await this.signInManager.PasswordSignInAsync(user, password, false, false);
+        //        /*Cac parameter: 
+        //          user, 
+        //          password, 
+        //          isPersistent(bool): period of time that cookies exist, need to inform user when using
+        //          lockoutOnFailure(bool): counter in Db*/
 
-                await this.emailService.SendAsync(email, "email verify",
-                    $"<a href=\"{link}\">Verify Email</a>", true);
+        //        //If successful signing in
+        //        if (signInResult.Succeeded)
+        //        {
+        //            return RedirectToAction("Index");
+        //        }
+        //    }
+        //    return RedirectToAction("Error");
+        //}
 
-                return RedirectToAction("EmailVerification");
-                #endregion
+        //public IActionResult Register() => View();
 
-                /*
-                //Register 
-                var registerResult = await this.signInManager.PasswordSignInAsync(user, password, false, false);
+        //[HttpPost]
+        //public async Task<IActionResult> Register(string userName, string password, string email)
+        //{
+        //    //Register func
+        //    //Create an identity user
+        //    var user = new IdentityUser
+        //    {
+        //        UserName = userName,
+        //        Email = email,
+        //    };
 
-                //If successful registering 
-                if (registerResult.Succeeded)
-                {
-                    return RedirectToAction("Login");
-                }*/
-            }
+        //    //Create a record in Db
+        //    var result = await this.userManager.CreateAsync(user, password);
 
-            return RedirectToAction("Error");
-        }
+        //    if (result.Succeeded)
+        //    {
+        //        #region Verify Email
+        //        //Generate email token
+        //        var code = await this.userManager.GenerateEmailConfirmationTokenAsync(user);
+        //        var link = Url.Action(nameof(RegisterVerifyEmail), "Home", new { userID = user.Id, code },
+        //            Request.Scheme, Request.Host.ToString());
 
-        [HttpPost]
-        public async Task<IActionResult> ForgotPassword(string email)
-        {
-            var user = await this.userManager.FindByEmailAsync(email);
-            if (user != null)
-            {
-                #region Verify Email
-                //Generate email token
-                var code = await this.userManager.GenerateEmailConfirmationTokenAsync(user);
-                var link = Url.Action(nameof(ForgotPasswordVerifyEmail), "Home", new { userID = user.Id, code },
-                    Request.Scheme, Request.Host.ToString());
+        //        await this.emailService.SendAsync(email, "email verify",
+        //            $"<a href=\"{link}\">Verify Email</a>", true);
 
-                await this.emailService.SendAsync(email, "email verify",
-                    $"<a href=\"{link}\">Verify Email</a>", true);
+        //        return RedirectToAction("EmailVerification");
+        //        #endregion
 
-                return RedirectToAction("EmailVerification");
-                #endregion
-            }
+        //        /*
+        //        //Register 
+        //        var registerResult = await this.signInManager.PasswordSignInAsync(user, password, false, false);
 
-            return RedirectToAction("Error");
-        }
+        //        //If successful registering 
+        //        if (registerResult.Succeeded)
+        //        {
+        //            return RedirectToAction("Login");
+        //        }*/
+        //    }
 
-        //After creating email token, sending noti to guest's email
-        //==> guest confirm email
-        //==> we take back the token, also redirect guest to next page
-        //==> but how do we know the exactly guest that we sent token ??
-        public async Task<IActionResult> RegisterVerifyEmail(string userID, string code)
-        {
-            //Find the user who verify email by ID
-            var user = await this.userManager.FindByIdAsync(userID);
-            if (user == null) return BadRequest();
+        //    return RedirectToAction("Error");
+        //}
 
-            //Confirm whether user verify email or not
-            var result = await this.userManager.ConfirmEmailAsync(user, code);
-            //After success confirmation from user, take them back to Login Page
-            if (result.Succeeded)
-            {
-                return View();
-            }
+        //[HttpPost]
+        //public async Task<IActionResult> ForgotPassword(string email)
+        //{
+        //    var user = await this.userManager.FindByEmailAsync(email);
+        //    if (user != null)
+        //    {
+        //        #region Verify Email
+        //        //Generate email token
+        //        var code = await this.userManager.GenerateEmailConfirmationTokenAsync(user);
+        //        var link = Url.Action(nameof(ForgotPasswordVerifyEmail), "Home", new { userID = user.Id, code },
+        //            Request.Scheme, Request.Host.ToString());
 
-            return BadRequest();
-        }
+        //        await this.emailService.SendAsync(email, "email verify",
+        //            $"<a href=\"{link}\">Verify Email</a>", true);
 
-        public async Task<IActionResult> ForgotPasswordVerifyEmail(string userID, string code)
-        {
-            //Find the user who verify email by ID
-            var user = await this.userManager.FindByIdAsync(userID);
-            if (user == null) return BadRequest();
+        //        return RedirectToAction("EmailVerification");
+        //        #endregion
+        //    }
 
-            //Confirm whether user verify email or not
-            var result = await this.userManager.ConfirmEmailAsync(user, code);
-            //After success confirmation from user, take them back to Login Page
-            if (result.Succeeded)
-            {
-                return View();
-            }
+        //    return RedirectToAction("Error");
+        //}
 
-            return BadRequest();
-        }
+        ////After creating email token, sending noti to guest's email
+        ////==> guest confirm email
+        ////==> we take back the token, also redirect guest to next page
+        ////==> but how do we know the exactly guest that we sent token ??
+        //public async Task<IActionResult> RegisterVerifyEmail(string userID, string code)
+        //{
+        //    //Find the user who verify email by ID
+        //    var user = await this.userManager.FindByIdAsync(userID);
+        //    if (user == null) return BadRequest();
 
-        public IActionResult ResetPassword(string userID, string code)
-        {
-            //Reset password 
-            return View("Login");
-        }
+        //    //Confirm whether user verify email or not
+        //    var result = await this.userManager.ConfirmEmailAsync(user, code);
+        //    //After success confirmation from user, take them back to Login Page
+        //    if (result.Succeeded)
+        //    {
+        //        return View();
+        //    }
 
-        public IActionResult EmailVerification() => View();
+        //    return BadRequest();
+        //}
 
-        public async Task<IActionResult> LogOut()
-        {
-            await this.signInManager.SignOutAsync();
-            return RedirectToAction("Login");
-        }
+        //public async Task<IActionResult> ForgotPasswordVerifyEmail(string userID, string code)
+        //{
+        //    //Find the user who verify email by ID
+        //    var user = await this.userManager.FindByIdAsync(userID);
+        //    if (user == null) return BadRequest();
+
+        //    //Confirm whether user verify email or not
+        //    var result = await this.userManager.ConfirmEmailAsync(user, code);
+        //    //After success confirmation from user, take them back to Login Page
+        //    if (result.Succeeded)
+        //    {
+        //        return View();
+        //    }
+
+        //    return BadRequest();
+        //}
+
+        //public IActionResult ResetPassword(string userID, string code)
+        //{
+        //    //Reset password 
+        //    return View("Login");
+        //}
+
+        //public IActionResult EmailVerification() => View();
+
+        //public async Task<IActionResult> LogOut()
+        //{
+        //    await this.signInManager.SignOutAsync();
+        //    return RedirectToAction("Login");
+        //}
 
     }
 }

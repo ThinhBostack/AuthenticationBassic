@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace AuthenticationBassic.AuthorizationRequirement
 {
+    //Reference: https://www.youtube.com/watch?v=RBMO_hruKaI&list=PLOeFnOV9YBa7dnrjpOG6lMpcyd7Wn7E8V&index=4
     //This class is used for taking request claim
     //Answer the ques: Are you allowed to pass here ?
     public class CustomRequirementClaim : IAuthorizationRequirement
